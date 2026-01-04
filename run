@@ -1,0 +1,82 @@
+#! /bin/bash
+# This script is meant to evoke the algorithm without requiring any input arguments
+
+CONTAINER="[ SpinX/Anonymize ]"
+
+
+##############################################################################
+# Configure paths
+
+SPINX_BASE=/spinx/v0
+OUTPUT_DIR=$SPINX_BASE/output
+INPUT_DIR=$SPINX_BASE/input
+
+##############################################################################
+
+# helper functions for error handling
+die() {
+    echo -e "Error: $CONTAINER $1"
+    exit "${2:-1}"
+}
+run_and_check() {
+    "$@"
+    local rc=$?
+    if [[ $rc -ne 0 ]]; then
+        die "Command failed: (exit $rc)" $rc
+    fi
+}
+##############################################################################
+
+# Parse configuration
+CONFIG_FILE=${SPINX_BASE}/config.json
+# Parse config from config.json
+echo -e "$CONTAINER  Loading configuration from ${CONFIG_FILE}"
+pairs=$(cat $CONFIG_FILE | jq -r '.config | keys | length')
+echo "total $pairs pairs in $CONFIG_FILE"
+
+keys=$(cat $CONFIG_FILE | jq -r '.config | keys[]')
+for key in $keys
+do
+  echo "key: ${key}"
+  value=$(cat $CONFIG_FILE | jq -r '.config.'$key)
+  echo "value: ${value}"
+  eval ${key}=${value}
+done
+
+##############################################################################
+# Check I/O directories and Generate metadata
+
+# Check that /output directory is empty
+if [ "-d" "$OUTPUT_DIR" ]
+    then
+        if [ "$(ls -A $OUTPUT_DIR)" ]; then
+            echo -e "$CONTAINER  Warning $OUTPUT_DIR is not Empty! Results may be overwritten."
+        fi
+    else
+        echo -e "$CONTAINER  $OUTPUT_DIR not found. It will be created."
+        mkdir $OUTPUT_DIR
+fi
+output_dir=$OUTPUT_DIR/
+
+# Check for input
+input_file=$(find $INPUT_DIR/* -not -path '*/\.*' -type f | head -1)
+if [[ -z "$input_file" ]] ; then
+  echo -e "Error: $CONTAINER No input file was found!"
+  exit 1
+fi
+
+PYTHONPATH=$PYTHONPATH:/spinx/v0/ run_and_check python $SPINX_BASE/anonymize.py -i "$INPUT_DIR" -o "$output_dir" -m "$map_file" --recursive --salt "$salt"
+E_STATUS=$?
+
+##############################################################################
+# If outputs exist, then go on...
+if [[ $E_STATUS == 0 ]]; then
+    chmod -R 777 $OUTPUT_DIR
+    echo -e "Message: $CONTAINER  Success."
+    echo "Process: Success"
+else
+    echo -e "Error: $CONTAINER  Errors occurred during anonymization... Exiting!"
+    exit 1
+fi
+
+exit 0

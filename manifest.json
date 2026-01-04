@@ -1,0 +1,142 @@
+{
+    "name": "anaomymize",
+    "label": "anaomymize",
+    "version": "1.0",
+    "description": "",
+    "maintainer": "Ben",
+    "SpinX": "2",
+
+    "id": "image_A_0x000001",
+    "type": "image",
+    "binds": [
+        {
+            "id": "input_0x000001",
+            "type": "dir",
+            "name": "Input",
+            "src": "input",
+            "dst": "/spinx/v0/input"
+        },
+        {
+            "id": "output_0x000001",
+            "type": "dir",
+            "name": "Output",
+            "src": "output",
+            "dst": "/spinx/v0/output"
+        }
+    ],
+    "config": {
+            "id": "config_0x000001",
+            "name": "Config",
+            "src": "config.json",
+            "dst": "/spinx/v0/config.json"
+    },
+    "ui_struct": [
+        {
+            "type": "steps",
+            "id": "step_top",
+            "sub": [
+                {
+                    "type": "step",
+                    "id": "step_a",
+                    "sub": [
+                        {
+                            "type": "pages",
+                            "id": "page_main",
+                            "sub": [
+                                {
+                                    "type": "page",
+                                    "id": "page_a",
+                                    "sub": [
+                                        {
+                                            "type": "group_module",
+                                            "id": "group_module_a",
+                                            "sub": [
+                                                {
+                                                    "type": "arg",
+                                                    "id": "input_filename"
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "type": "group_module",
+                                            "id": "group_module_arg",
+                                            "sub": [
+                                                {
+                                                    "type": "arg",
+                                                    "id": "map_file"
+                                                },
+                                                {
+                                                    "type": "arg",
+                                                    "visibleFrom": "hide",
+                                                    "id": "salt"
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+    ],
+    "args": [
+        {
+            "type": "arg",
+            "arg_type": "text",
+            "tip": "the dir name under input",
+            "name": "data",
+            "id": "input_filename",
+            "default": "data"
+        },
+        {
+            "type": "arg",
+            "arg_type": "bool",
+            "tip": "Output CSV map file to save original -> pseudonym mapping.",
+            "name": "Output Mapping CSV",
+            "id": "map_file",
+            "default": true
+        },
+        {
+            "type": "arg",
+            "arg_type": "text",
+            "tip": "Salt value for pseudonym generation.",
+            "name": "Salt",
+            "id": "salt",
+            "default": "anon"
+        }
+    ],
+    "module": [
+        {
+            "type": "steps",
+            "name": "Step Top",
+            "id": "step_top"
+        },
+        {
+            "type": "step",
+            "name": "Anonymize",
+            "id": "step_a"
+        },
+        {
+            "type": "pages",
+            "name": "Page Main",
+            "id": "page_main"
+        },
+        {
+            "type": "page",
+            "name": "Basic Parameters",
+            "id": "page_a"
+        },
+        {
+            "type": "group_module",
+            "name": "Input/Data",
+            "id": "group_module_a"
+        },
+        {
+            "type": "group_module",
+            "name": "Defined parameters",
+            "id": "group_module_arg"
+        }
+    ]
+}
