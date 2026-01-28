@@ -29,23 +29,8 @@ run_and_check() {
 
 # Parse configuration
 CONFIG_FILE=${SPINX_BASE}/config.json
-# Parse config from config.json
-echo -e "$CONTAINER  Loading configuration from ${CONFIG_FILE}"
-pairs=$(cat $CONFIG_FILE | jq -r '.config | keys | length')
-echo "total $pairs pairs in $CONFIG_FILE"
-
-keys=$(cat $CONFIG_FILE | jq -r '.config | keys[]')
-for key in $keys
-do
-  echo "key: ${key}"
-  value=$(cat $CONFIG_FILE | jq -r '.config.'$key)
-  echo "value: ${value}"
-  eval ${key}=${value}
-done
 
 ##############################################################################
-# Check I/O directories and Generate metadata
-
 # Check that /output directory is empty
 if [ "-d" "$OUTPUT_DIR" ]
     then
@@ -58,15 +43,166 @@ if [ "-d" "$OUTPUT_DIR" ]
 fi
 output_dir=$OUTPUT_DIR/
 
-# Check for input
-input_file=$(find $INPUT_DIR/* -not -path '*/\.*' -type f | head -1)
-if [[ -z "$input_file" ]] ; then
-  echo -e "Error: $CONTAINER No input file was found!"
-  exit 1
+# Count total files to process (all regular files under input). This is used to calculate percent progress.
+total_files=$(find "$INPUT_DIR" -type f | wc -l)
+if [[ "$total_files" -eq 0 ]]; then
+    echo -e "Error: $CONTAINER No input files found under $INPUT_DIR"
+    exit 1
 fi
 
-PYTHONPATH=$PYTHONPATH:/spinx/v0/ run_and_check python $SPINX_BASE/anonymize.py -i "$INPUT_DIR" -o "$output_dir" -m "$map_file" --recursive --salt "$salt"
-E_STATUS=$?
+echo "Message: $CONTAINER Found $total_files files to process"
+echo "Message: $CONTAINER Doing anonymization, please wait."
+
+# Build deidentify command arguments from config variables (set earlier by parsing config.json)
+DEIDENTIFY_CMD=${DEIDENTIFY_CMD:-deidentify}
+DEIDENTIFY_ARGS=()
+
+# boolean flags
+[[ "${retain_date:-false}" == "true" ]] && DEIDENTIFY_ARGS+=("--retain-date")
+[[ "${retain_dev:-false}" == "true" ]] && DEIDENTIFY_ARGS+=("--retain-dev")
+[[ "${retain_org:-false}" == "true" ]] && DEIDENTIFY_ARGS+=("--retain-org")
+[[ "${retain_pid_hash:-false}" == "true" ]] && DEIDENTIFY_ARGS+=("--retain-pid-hash")
+[[ "${retain_uid:-false}" == "true" ]] && DEIDENTIFY_ARGS+=("--retain-uid")
+[[ "${expl_item_len:-false}" == "true" ]] && DEIDENTIFY_ARGS+=("--expl-item-len")
+[[ "${expl_seq_len:-false}" == "true" ]] && DEIDENTIFY_ARGS+=("--expl-seq-len")
+[[ "${group_len:-false}" == "true" ]] && DEIDENTIFY_ARGS+=("--group-len")
+[[ "${undef_item_len:-false}" == "true" ]] && DEIDENTIFY_ARGS+=("--undef-item-len")
+[[ "${undef_seq_len:-false}" == "true" ]] && DEIDENTIFY_ARGS+=("--undef-seq-len")
+
+# attribute replacements: support JSON array (preferred) or legacy text
+# First try to read replace_attrs as a JSON array from the config file using jq.
+replace_attrs_array=()
+mapfile -t replace_attrs_array < <(jq -r '.config.replace_attrs[]? // empty' "$CONFIG_FILE" 2>/dev/null || true)
+
+# If jq didn't find array elements but a legacy string exists in the variable, split on newlines
+if [ ${#replace_attrs_array[@]} -eq 0 ] && [[ -n "${replace_attrs:-}" ]]; then
+    IFS=$'\n' read -r -a replace_attrs_array <<< "$(printf '%s' "$replace_attrs")"
+fi
+
+for line in "${replace_attrs_array[@]:-}"; do
+    [[ -z "$line" ]] && continue
+    # trim whitespace
+    val=$(echo "$line" | awk '{$1=$1;print}')
+    # validate format key=value
+    if [[ "$val" != *=* ]]; then
+        echo "Error: $CONTAINER malformed replace_attrs entry (missing '='): '$val'"
+        exit 2
+    fi
+    key=${val%%=*}
+    # basic validation: key must be either 8 hex digits (tag) or a keyword-like token
+    if [[ ! "$key" =~ ^[0-9A-Fa-f]{8}$ && ! "$key" =~ ^[A-Za-z][A-Za-z0-9_]*$ ]]; then
+        echo "Error: $CONTAINER replace_attrs key looks invalid: '$key'. Expected a DICOM keyword (e.g. PatientName) or an 8-hex tag (e.g. 00100010). Please correct the key or use the tag value."
+        exit 2
+    fi
+    DEIDENTIFY_ARGS+=("-s${val}")
+done
+
+##########################################################################
+# Folder process by folder, faster than per-file processing 41s for 1472 files
+echo -e "$CONTAINER Running: $DEIDENTIFY_CMD ${DEIDENTIFY_ARGS[*]} -- \"$INPUT_DIR\" \"$output_dir\""
+echo "Process: Processing"
+
+# Time the actual deidentify execution (bulk mode)
+start_time=$(date +%s.%N)
+run_and_check "$DEIDENTIFY_CMD" "${DEIDENTIFY_ARGS[@]}" -- "$INPUT_DIR" "$output_dir"
+rc=$?
+end_time=$(date +%s.%N)
+elapsed=$(awk "BEGIN{print $end_time - $start_time}")
+
+# humanize elapsed
+seconds_to_hms() {
+    local secs_float="$1"
+    local T=$(awk "BEGIN{printf(\"%d\", $secs_float)}")
+    local h=$((T/3600))
+    local m=$(((T%3600)/60))
+    local s=$((T%60))
+    printf "%02d:%02d:%02d" $h $m $s
+}
+elapsed_hms=$(seconds_to_hms $elapsed)
+
+if [[ $rc -ne 0 ]]; then
+    echo "Error: $CONTAINER deidentify failed (exit $rc)"
+    E_STATUS=$rc
+else
+    # compute avg per file
+    if [[ "$total_files" -gt 0 ]]; then
+        avg_per_file=$(awk "BEGIN{print $elapsed / $total_files}")
+    else
+        avg_per_file=$elapsed
+    fi
+    avg_hms=$(seconds_to_hms $avg_per_file)
+    echo "Message: $CONTAINER Execution time: ${elapsed}s (${elapsed_hms}); avg per file: ${avg_per_file}s (${avg_hms})"
+    E_STATUS=0
+fi
+
+# ##########################################################################
+# # Folder process - per-file processing to report progress, slower than folder patch processing. 8min for 1472 files
+# echo -e "$CONTAINER Preparing to process files with: $DEIDENTIFY_CMD ${DEIDENTIFY_ARGS[*]} -- <infile> <outfile>"
+
+# processed=0
+# status=0
+# # # Time the actual deidentify execution (bulk mode)
+# start_time=$(date +%s.%N)
+
+# # Process files one-by-one so we can report progress. Preserve directory structure under output.
+# while IFS= read -r -d '' src; do
+#     # compute relative path and destination
+#     rel="${src#$INPUT_DIR/}"
+#     dest_dir="$output_dir/$(dirname "$rel")"
+#     mkdir -p "$dest_dir"
+#     dest="$dest_dir/$(basename "$src")"
+#     tmp="${dest}.tmp.$(date +%s%N)"
+#     echo "Message: $CONTAINER Processing file $((processed+1))/$total_files: $rel"
+
+#     # Run deidentify for this single file. Do NOT exit whole script on a single-file failure; log and continue.
+#     "$DEIDENTIFY_CMD" "${DEIDENTIFY_ARGS[@]}" -- "$src" "$tmp"
+#     rc=$?
+#     if [[ $rc -ne 0 ]]; then
+#         echo "Error: $CONTAINER deidentify failed for $src (exit $rc)" >&2
+#         rm -f "$tmp" || true
+#         status=1
+#     else
+#         mv -f "$tmp" "$dest"
+#         chmod 644 "$dest" || true
+#     fi
+
+#     processed=$((processed+1))
+#     pct=$(( processed * 100 / total_files ))
+#     echo "Process: $processed/$total_files ($pct%)"
+# done < <(find "$INPUT_DIR" -type f -print0)
+
+# E_STATUS=$status
+
+
+# rc=$?
+# end_time=$(date +%s.%N)
+# elapsed=$(awk "BEGIN{print $end_time - $start_time}")
+
+# # humanize elapsed
+# seconds_to_hms() {
+#     local secs_float="$1"
+#     local T=$(awk "BEGIN{printf(\"%d\", $secs_float)}")
+#     local h=$((T/3600))
+#     local m=$(((T%3600)/60))
+#     local s=$((T%60))
+#     printf "%02d:%02d:%02d" $h $m $s
+# }
+# elapsed_hms=$(seconds_to_hms $elapsed)
+
+# if [[ $rc -ne 0 ]]; then
+#     echo "Error: $CONTAINER deidentify failed (exit $rc)"
+#     E_STATUS=$rc
+# else
+#     # compute avg per file
+#     if [[ "$total_files" -gt 0 ]]; then
+#         avg_per_file=$(awk "BEGIN{print $elapsed / $total_files}")
+#     else
+#         avg_per_file=$elapsed
+#     fi
+#     avg_hms=$(seconds_to_hms $avg_per_file)
+#     echo "Message: $CONTAINER Execution time: ${elapsed}s (${elapsed_hms}); avg per file: ${avg_per_file}s (${avg_hms})"
+#     E_STATUS=0
+# fi
 
 ##############################################################################
 # If outputs exist, then go on...

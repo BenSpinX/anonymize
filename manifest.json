@@ -1,7 +1,7 @@
 {
     "name": "anaomymize",
     "label": "anaomymize",
-    "version": "1.0",
+    "version": "2.0",
     "description": "",
     "maintainer": "Ben",
     "SpinX": "2",
@@ -63,12 +63,52 @@
                                             "sub": [
                                                 {
                                                     "type": "arg",
-                                                    "id": "map_file"
+                                                    "id": "retain_date"
+                                                },
+                                                {
+                                                    "type": "arg",
+                                                    "id": "retain_dev"
+                                                },
+                                                {
+                                                    "type": "arg",
+                                                    "id": "retain_org"
+                                                },
+                                                {
+                                                    "type": "arg",
+                                                    "id": "retain_pid_hash"
+                                                },
+                                                {
+                                                    "type": "arg",
+                                                    "id": "retain_uid"
                                                 },
                                                 {
                                                     "type": "arg",
                                                     "visibleFrom": "hide",
-                                                    "id": "salt"
+                                                    "id": "expl_item_len"
+                                                },
+                                                {
+                                                    "type": "arg",
+                                                    "visibleFrom": "hide",
+                                                    "id": "expl_seq_len"
+                                                },
+                                                {
+                                                    "type": "arg",
+                                                    "visibleFrom": "hide",
+                                                    "id": "group_len"
+                                                },
+                                                {
+                                                    "type": "arg",
+                                                    "visibleFrom": "hide",
+                                                    "id": "undef_item_len"
+                                                },
+                                                {
+                                                    "type": "arg",
+                                                    "visibleFrom": "hide",
+                                                    "id": "undef_seq_len"
+                                                },
+                                                {
+                                                    "type": "arg",
+                                                    "id": "replace_attrs"
                                                 }
                                             ]
                                         }
@@ -93,18 +133,95 @@
         {
             "type": "arg",
             "arg_type": "bool",
-            "tip": "Output CSV map file to save original -> pseudonym mapping.",
-            "name": "Output Mapping CSV",
-            "id": "map_file",
-            "default": true
+            "tip": "Retain dates and times present in Attributes",
+            "name": "Retain Date/Time",
+            "id": "retain_date",
+            "default": false
         },
         {
             "type": "arg",
-            "arg_type": "text",
-            "tip": "Salt value for pseudonym generation.",
-            "name": "Salt",
-            "id": "salt",
-            "default": "anon"
+            "arg_type": "bool",
+            "tip": "Retain device identity information",
+            "name": "Retain Device",
+            "id": "retain_dev",
+            "default": false
+        },
+        {
+            "type": "arg",
+            "arg_type": "bool",
+            "tip": "Retain institution/organization identity information",
+            "name": "Retain Institution",
+            "id": "retain_org",
+            "default": false
+        },
+        {
+            "type": "arg",
+            "arg_type": "bool",
+            "tip": "Retain hashed Patient ID in Attributes",
+            "name": "Retain Patient ID (hash)",
+            "id": "retain_pid_hash",
+            "default": false
+        },
+        {
+            "type": "arg",
+            "arg_type": "bool",
+            "tip": "Retain UIDs in Attributes",
+            "name": "Retain UIDs",
+            "id": "retain_uid",
+            "default": false
+        },
+        {
+            "type": "arg",
+            "arg_type": "bool",
+            "tip": "Encode sequence items with explicit length",
+            "name": "Explicit Item Length",
+            "id": "expl_item_len",
+            "default": false
+        },
+        {
+            "type": "arg",
+            "arg_type": "bool",
+            "tip": "Encode sequences with explicit length",
+            "name": "Explicit Sequence Length",
+            "id": "expl_seq_len",
+            "default": false
+        },
+        {
+            "type": "arg",
+            "arg_type": "bool",
+            "tip": "Include Group Length attributes",
+            "name": "Include Group Length",
+            "id": "group_len",
+            "default": false
+        },
+        {
+            "type": "arg",
+            "arg_type": "bool",
+            "tip": "Encode all sequence items with undefined length",
+            "name": "Undefined Item Length",
+            "id": "undef_item_len",
+            "default": false
+        },
+        {
+            "type": "arg",
+            "arg_type": "bool",
+            "tip": "Encode all sequences with undefined length",
+            "name": "Undefined Sequence Length",
+            "id": "undef_seq_len",
+            "default": false
+        },
+        {
+            "type": "arg",
+            "arg_type": "plus_params",
+            "tip": "Attribute replacements, one per line in the form 'TagOrName=Value', forwarded as -s options",
+            "name": "Attribute Replacements",
+            "id": "replace_attrs",
+            "min": 1,
+            "max": 3,
+            "default": [
+                "PatientName=ANONYMIZED",
+                "00100020=0000"
+            ]
         }
     ],
     "module": [
