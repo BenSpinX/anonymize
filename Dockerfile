@@ -36,7 +36,10 @@ WORKDIR /home/dcm4che
 # Make directory for spinx spec (v0)
 ENV SPINX /spinx/v0
 WORKDIR ${SPINX}
-COPY run ${SPINX}/
+COPY run \
+     manifest.json \
+     deidentify.md \
+     ${SPINX}/
 
 # Add code to determine classification from dicom descrip (label)
 RUN chmod +x ${SPINX}/run*

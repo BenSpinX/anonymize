@@ -35,7 +35,7 @@ CONFIG_FILE=${SPINX_BASE}/config.json
 if [ "-d" "$OUTPUT_DIR" ]
     then
         if [ "$(ls -A $OUTPUT_DIR)" ]; then
-            echo -e "$CONTAINER  Warning $OUTPUT_DIR is not Empty! Results may be overwritten."
+            echo -e "Message: $CONTAINER  Warning output folder is not Empty! Results may be overwritten."
         fi
     else
         echo -e "$CONTAINER  $OUTPUT_DIR not found. It will be created."
@@ -46,7 +46,7 @@ output_dir=$OUTPUT_DIR/
 # Count total files to process (all regular files under input). This is used to calculate percent progress.
 total_files=$(find "$INPUT_DIR" -type f | wc -l)
 if [[ "$total_files" -eq 0 ]]; then
-    echo -e "Error: $CONTAINER No input files found under $INPUT_DIR"
+    echo -e "Error: $CONTAINER No input files found under input folder"
     exit 1
 fi
 
