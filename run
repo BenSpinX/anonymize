@@ -1,7 +1,7 @@
 #! /bin/bash
 # This script is meant to evoke the algorithm without requiring any input arguments
 
-CONTAINER="[ SpinX/Anonymize ]"
+CONTAINER="[ Anonymize ]"
 
 
 ##############################################################################
